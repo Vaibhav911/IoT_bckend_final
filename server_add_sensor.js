@@ -6,10 +6,6 @@ var mongoose = require('mongoose');
 mongoose.set('useFindAndModify', false);
 var axios = require('axios')
 
-var {Sensor_Schema} = require('./IoT_Campus_Schema_alt');
-var {Zone_Schema} = require('./IoT_Campus_Schema_alt');
-var {Floor_Schema} = require('./IoT_Campus_Schema_alt');
-var {Building_Schema} = require('./IoT_Campus_Schema_alt');
 var {Campus_Schema} = require('./IoT_Campus_Schema_alt');
 
 
@@ -19,72 +15,47 @@ app.use(bodyParser.json());
 
 
 app.use('/getlabels', (req, res) => {
-    // labels = [{campus: '', 
-    //             buildingArray: [{buildingName: '', 
-    //                 floorArray: [{floorName: '',
-    //                     zoneArray: [{zoneName: '',
-    //                         sensorArray: []
-    //                         }]}]}]}];
-    labels = [];
+    // Used to create the suggestions for the autosuggesting form that
+    // the user employs while adding sensors
 
     Campus_Schema.find((err, campus_objects) => {
-        console.log('cmaps objects are ' + JSON.stringify(campus_objects))
         var Labels = [];
-        // var buildingLabels = [];
-        // var floorLabels = [];
-        // var zoneLabels = [];
+        //stores all location labels, such as campus, floor, building and zone labels
         var sensorTypeLabels = [];
+        // stores suggestions for possible sensor types
         for (var campus=0;campus<campus_objects.length;campus++)
         {
-            // console.log('campsu name is ' + campus_objects[campus].campus)
             Labels.push({label: campus_objects[campus].campus})
+            //The location labels get updated with the various campus names present
+            // in the database
             sensorTypeLabels = sensorTypeLabels.concat(campus_objects[campus].sensorTypesAvailable)
-            // console.log('lables array is ' + JSON.stringify(labels))
+            //The location labels get updated with the various campus names present
+            // in the database. This is not done at each level since sensorTypesAVailable
+            // for a campus is a superset of sensorTypesAvailable of all its buildings.
             for (var building=0;building<campus_objects[campus].buildingArray.length;building++)
             {
-                // console.log('building name is' + campus_objects[campus].buildingArray[building].building)
                 Labels.push({label: campus_objects[campus].buildingArray[building].building})
-                // labels[campus].buildingArray[building] = {
-                //             building: campus_objects[campus].buildingArray[building].building,
-                //             floorArray: []};
-
                 for (var floor=0;floor<campus_objects[campus].buildingArray[building].floorArray.length;floor++)
                 {
-                    Labels.push({label: JSON.stringify(campus_objects[campus].buildingArray[building].floorArray[floor].floor)})
-                    // labels[campus].buildingArray[building].floorArray[floor] = {
-                    //         floor: campus_objects[campus].buildingArray[building].floorArray[floor].floor,
-                    //         zoneArray: []};
-
+                    Labels.push({label: JSON.stringify(campus_objects[campus].buildingArray[building].floorArray[floor].floor)});
                         for (var zone=0;zone<campus_objects[campus].buildingArray[building].floorArray[floor].zoneArray.length;zone++)
                         {
                             Labels.push({label: campus_objects[campus].buildingArray[building].floorArray[floor].zoneArray[zone].zone})
-                            // labels[campus].buildingArray[building].floorArray[floor].zoneArray[zone] = 
-                            // {
-                            //     zone: campus_objects[campus].buildingArray[building].floorArray[floor].zoneArray[zone].zone,
-                            //     sensorArray: []
-                            // }
-
-                            // for (var sensor=0;sensor<campus_objects[campus].buildingArray[building].floorArray[floor].zoneArray[zone].sensorArray.length;sensor++)
-                            // {
-                            //     labels[campus].buildingArray[building].floorArray[floor].zoneArray[zone].sensorArray[sensor] = 
-                            //     campus_objects[campus].buildingArray[building].floorArray[floor].zoneArray[zone].sensorArray[sensor].sensorId
-                            // }
+                            // Labels.label now has all location labels, from zone to campus level
                         }
                 }
             }
         }
-        // var labels = {campusLabels: campusLabels, buildingLabels: buildingLabels, floorLabels: floorLabels, zoneLabels: zoneLabels, sensorTypeLabels: sensorTypeLabels}
-        
-        console.log('labels array is ' + JSON.stringify(Labels))
-        var finalLabels = {locationLabels: Labels, sensorTypeLabels: sensorTypeLabels}//add qual and quant later**************************************
+        var finalLabels = {locationLabels: Labels, sensorTypeLabels: sensorTypeLabels};
+        // compiles a final object to be sent to the frontend
         res.json(finalLabels)
+        // sends suggestions to the frontend file which adds a sensor
     })
 
 })
 
 app.use('/storesensor', (req, res) => {
-    console.log('query: ' + JSON.stringify(req.query));
-    res.send('request received');
+    // used to add the new sensor's details to the database
     var sensorinfo= new Campus_Schema(
         {
             campus: req.query.campus,
@@ -118,8 +89,6 @@ app.use('/storesensor', (req, res) => {
                                         sensorId: req.query.sensorId,
                                         type: req.query.sensorType,
                                         datatype: req.query.sensorDataType
-                                        // longitude: req.query.longi
-                                        // latitude: {type: String},
                                     }
                                 ]
                             }] 
@@ -130,22 +99,27 @@ app.use('/storesensor', (req, res) => {
         }
 
     ); // creates a complete object, then later decides which parts to save
+    // depending on the part of the object which does not already belong to the database
     sensorinfo.sensorTypesAvailable.push(req.query.sensorType);
     sensorinfo.buildingArray[0].sensorTypesAvailable.push(req.query.sensorType);
     sensorinfo.buildingArray[0].floorArray[0].sensorTypesAvailable.push(
         req.query.sensorType);
     sensorinfo.buildingArray[0].floorArray[0].zoneArray[0].sensorTypesAvailable.push(
         req.query.sensorType);
-
+    // the sensor types array at each level of the hierarchy must include at least the
+    // sensor type of the added sensor
     Campus_Schema.findOne({campus: req.query.campus}, (err,campusObj) =>
+    // searches for a campus with the same campus name as that of the added sensor
         {
-            if (err || campusObj==null) // no such object
+            if (err || campusObj==null) 
+            // no such object exists
             {
                 sensorinfo.save(err =>
                     {
                         if (err)
                         {
                             console.log("Error is "+err);
+                            // logs the error
                         }
                         else
                         {
@@ -153,12 +127,14 @@ app.use('/storesensor', (req, res) => {
                         }
                     }
                 )
+                // saves the entire new object if the campus is new
             }
             else
             {
                 console.log(req.query.campus + " campus exists")
 
                 var buildingObj=null;
+                // stores the matching building object, else null
                 var existsSensorType=false;
                 for (var i=0; i<campusObj.sensorTypesAvailable.length; i++)
                 {
@@ -172,7 +148,10 @@ app.use('/storesensor', (req, res) => {
                 {
                     campusObj.sensorTypesAvailable.push(req.query.sensorType);
                 }
+                // adds the sensor type to sensorTypesAvailable if it does not
+                // already exist
                 var bArray = campusObj.buildingArray;
+                // for brevity in code
                 for (var i=0; i<bArray.length; i++)
                 {
                     if (bArray[i].building==req.query.building)
@@ -181,12 +160,13 @@ app.use('/storesensor', (req, res) => {
                     }
                 }
                 if (!buildingObj)
+                // no matching building
                 {
                     bArray.push(sensorinfo.buildingArray[0]);
+                    // modifies existing campusObj
                 }
                 else //there exists such a building
                 {
-                    console.log(req.query.building + " building exists")
                     var floorObj=null;
                     existsSensorType=false;
                     for (var i=0; i<buildingObj.sensorTypesAvailable.length; i++)
@@ -201,7 +181,9 @@ app.use('/storesensor', (req, res) => {
                     {
                         buildingObj.sensorTypesAvailable.push(req.query.sensorType);
                     }
+                    // to add sensor type if it does not already exist
                     var fToAdd = sensorinfo.buildingArray[0].floorArray[0];
+                    // for brevity of code
                     var fArray = buildingObj.floorArray;
                     for (var i=0; i<fArray.length; i++)
                     {
@@ -213,10 +195,10 @@ app.use('/storesensor', (req, res) => {
                     if (!floorObj)
                     {
                         buildingObj.floorArray.push(fToAdd);
+                        // modifies existing campusObj
                     }
                     else //there exists such a floor
                     {
-                        console.log(req.query.floor + " floor exists")
                         var zoneObj=null;
                         existsSensorType=false;
                         for (var i=0; i<floorObj.sensorTypesAvailable.length; i++)
@@ -232,6 +214,7 @@ app.use('/storesensor', (req, res) => {
                             floorObj.sensorTypesAvailable.push(req.query.sensorType);
                         }
                         var zToAdd = fToAdd.zoneArray[0];
+                        // for brevity
                         var zArray = floorObj.zoneArray;
                         for (var i=0; i<zArray.length; i++)
                         {
@@ -243,10 +226,10 @@ app.use('/storesensor', (req, res) => {
                         if (!zoneObj)
                         {
                             floorObj.zoneArray.push(zToAdd);
+                            // modifies existing campusObj
                         }
                         else //there exists such a zone
                         {
-                            console.log(req.query.zone + " zone exists")
                             var sensorObj=null;
                             existsSensorType=false;
                             for (var i=0; i<zoneObj.sensorTypesAvailable.length; i++)
@@ -273,25 +256,21 @@ app.use('/storesensor', (req, res) => {
                             if (!sensorObj)
                             {
                                 zoneObj.sensorArray.push(sToAdd);
-                            }
-                            else //there exists such a sensor
-                            {
-                                console.log("Sensor already exists!");
+                                // modifies existing campusObj
                             }
                         }
                     }
                 }
                 campusObj.save(err =>
+                // saves campusObj after making modifications as show above
                     {
                         if (err)
                         {
                             console.log("Error is "+err);
-                            // res.send("campus object saved succesfuly");
                         }
                         else
                         {
                             console.log("Campus object saved successfully");
-                            // res.send("campus object saved succesfuly");
                         }
                     }
                 )
